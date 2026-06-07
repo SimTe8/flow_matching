@@ -3,7 +3,7 @@ __pycache__/
 outputs/
 .ipynb_checkpoints/
 .vscode/
-data/
+data/__pycache__/
 results/
 src/__pycache__/
 src/*.pyc
