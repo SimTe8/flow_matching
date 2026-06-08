@@ -1,0 +1,24 @@
+Flow Matching Concept:
+----------------------
+Yaron Lipman, Ricky T. Q. Chen, Heli Ben-Hamu, Maximilian Nickel, & Matt Le. (2023). Flow matching for generative modeling. In The Eleventh International Conference on Learning Representations (ICLR 2023).
+https://arxiv.org/abs/2210.02747
+
+Anne Gagneux, Ségolène Martin, Rémi Emonet, Quentin Bertrand, & Mathurin Massias. (2025, April 28). A visual dive into conditional flow matching. ICLR Blogposts 2025.
+https://dl.heeere.com/conditional-flow-matching/blog/conditional-flow-matching/
+
+
+
+Code references:
+----------------
+U-Net architecture: Original U-Net paper Ronneberger et al.
+Ronneberger, O., Fischer, P., Brox, T. (2015). U-Net: Convolutional Networks for Biomedical Image Segmentation. In: Navab, N., Hornegger, J., Wells, W., Frangi, A. (eds) Medical Image Computing and Computer-Assisted Intervention – MICCAI 2015. MICCAI 2015. Lecture Notes in Computer Science(), vol 9351. Springer, Cham. 
+https://doi.org/10.1007/978-3-319-24574-4_28
+
+Sinusoidal time embedding: DDPM Ho et al.
+Ho, J., Jain, A., & Abbeel, P. (2020). Denoising Diffusion Probabilistic Models. In Advances in Neural Information Processing Systems (Vol. 33, pp. 6840–6851).
+https://github.com/hojonathanho/diffusion/tree/master
+
+General code snippets from the PyTorch tutorial
+https://docs.pytorch.org/tutorials/beginner/basics/intro.html
+
+In the adjustment of some code pieces, the large-language-model Gemini was used.

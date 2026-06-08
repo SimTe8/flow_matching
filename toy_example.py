@@ -29,11 +29,11 @@ else:
 
 # GLOBAL SETTINGS
 config = {
-    "experiment_name": "letters_ST_baseline",
-    "dataset": "letters",  # options: "moons", "circles", "letters"
+    "experiment_name": "moons_no_t_dep",
+    "dataset": "moons",  # options: "moons", "circles", "letters"
     "letters": "ST",  # only used if dataset == "letters"
     "n_train_samples": 10000,
-    "n_test_samples": 500,
+    "n_test_samples": 200,
     # model settings
     "model": "SimpleMLP_VF",  # options: "SimpleMLP_VF", "MLP_VF"
     "hidden_dim": 128,
@@ -41,8 +41,8 @@ config = {
     "lr": 1e-3,
     # integration settings
     "integrator": "rk4",
-    "h": 1e-1,
-    "n_steps": 10,
+    "h": 1e-2,
+    "n_steps": 100,
     "noise_level": 0.03,
     # training settings
     "train_config": {

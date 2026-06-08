@@ -8,7 +8,9 @@ from .data import plot_samples
 from .integrators import euler, midpoint, rk2, rk4
 
 
-def integrate(model, x0, n_steps=100, integrator="euler", h=1e-2, plot=False):
+def integrate(
+    model, x0, n_steps=100, integrator="euler", h=1e-2, plot=False, verbose=True
+):
 
     integrators = {
         "euler": euler,
@@ -39,7 +41,7 @@ def integrate(model, x0, n_steps=100, integrator="euler", h=1e-2, plot=False):
     xt = x0
     xt_history = []
     with torch.no_grad():
-        for step in tqdm(range(n_steps), desc="Integrating: "):
+        for step in tqdm(range(n_steps), desc="Integrating: ", disable=not verbose):
             t = step * dt
             xt = solver(xt, f, t, h)
             xt_history.append(xt.detach().cpu().numpy())

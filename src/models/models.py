@@ -135,7 +135,7 @@ class ContinuousTimeEmbedding(nn.Module):
 class TimeEmbeddingMLPVectorFieldND(nn.Module):
     """Time-conditioned MLP with sinusoidal embedding for image vector fields."""
 
-    def __init__(self, img_size=28, hidden_dim=256, time_emb_dim=32):
+    def __init__(self, img_size=28, hidden_dim=256, time_emb_dim=64):
         super().__init__()
 
         self.name = "TimeEmbeddingMLP_VF"
@@ -182,15 +182,81 @@ class TimeEmbeddingMLPVectorFieldND(nn.Module):
         return out.reshape(-1, self.img_size, self.img_size)
 
 
+# CNN models to test time embedding impact
+
+
+class CNNVectorFieldNoTime(nn.Module):
+    """Pure CNN vector field completely ignoring the time parameter t."""
+
+    def __init__(self, in_channels=1, hidden_dim=64):
+        super().__init__()
+        self.name = "CNN_NoTime_VF"
+
+        # Identical spatial architecture to the time-conditioned version
+        self.conv1 = nn.Conv2d(in_channels, hidden_dim, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(hidden_dim, in_channels, kernel_size=3, padding=1)
+
+    def forward(self, xt, t):
+        # xt shape: (B, 1, 28, 28), t is ignored in computation
+        h = F.silu(self.conv1(xt))
+        h = F.silu(self.conv2(h))
+        out = self.conv3(h)
+        return out
+
+
+class CNNVectorFieldWithTime(nn.Module):
+    """CNN vector field with modulated continuous time embedding."""
+
+    def __init__(self, in_channels=1, hidden_dim=64):
+        super().__init__()
+        self.name = "CNN_WithTime_VF"
+
+        # Time embedding block
+        self.time_emb = nn.Sequential(
+            ContinuousTimeEmbedding(dim=hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+
+        # Spatial architecture
+        self.conv1 = nn.Conv2d(in_channels, hidden_dim, kernel_size=3, padding=1)
+        self.time_proj1 = nn.Linear(hidden_dim, hidden_dim)
+
+        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
+        self.time_proj2 = nn.Linear(hidden_dim, hidden_dim)
+
+        self.conv3 = nn.Conv2d(hidden_dim, in_channels, kernel_size=3, padding=1)
+
+    def forward(self, xt, t):
+        # xt shape: (B, 1, 28, 28), t shape: (B, 1)
+
+        # 1. Compute time contexts
+        t_emb = self.time_emb(t)
+        t_shift1 = self.time_proj1(t_emb).unsqueeze(-1).unsqueeze(-1)
+        t_shift2 = self.time_proj2(t_emb).unsqueeze(-1).unsqueeze(-1)
+
+        # 2. Forward pass with layer-wise time injection
+        h = F.silu(self.conv1(xt) + t_shift1)
+        h = F.silu(self.conv2(h) + t_shift2)
+        out = self.conv3(h)
+        return out
+
+
+# U-Net
+
+
 class TimeConvBlock(nn.Module):
     """Convolutional block with time injection."""
 
-    def __init__(self, in_ch, out_ch, time_dim):
+    def __init__(self, in_ch, out_ch, time_dim, fake=False):
         super().__init__()
         self.conv = nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1)
         # GroupNorm works better than BatchNorm for generative models
         self.norm = nn.GroupNorm(8, out_ch)
         self.time_proj = nn.Linear(time_dim, out_ch)
+        self.fake = fake
 
     def forward(self, x, t_emb):
         # 1. Project time to match channel dimension
@@ -199,13 +265,16 @@ class TimeConvBlock(nn.Module):
 
         # 2. Convolve and inject time before activation
         h = self.norm(self.conv(x))
-        return F.silu(h + t_shift)
+        if not self.fake:
+            return F.silu(h + t_shift)
+        else:
+            return F.silu(h)
 
 
 class MiniUNetVectorField(nn.Module):
     """A small U-Net architecture for 28x28 MNIST Flow Matching."""
 
-    def __init__(self, in_channels=1, base_channels=32):
+    def __init__(self, in_channels=1, base_channels=32, fake=False):
         super().__init__()
         self.name = "MiniUNet_VF"
 
@@ -219,26 +288,34 @@ class MiniUNetVectorField(nn.Module):
 
         # Downsampling (Encoder)
         # 28x28 -> 14x14
-        self.down1 = TimeConvBlock(in_channels, base_channels, time_dim)
+        self.down1 = TimeConvBlock(in_channels, base_channels, time_dim, fake=fake)
         self.pool1 = nn.Conv2d(base_channels, base_channels, 4, 2, 1)
 
         # 14x14 -> 7x7
-        self.down2 = TimeConvBlock(base_channels, base_channels * 2, time_dim)
+        self.down2 = TimeConvBlock(
+            base_channels, base_channels * 2, time_dim, fake=fake
+        )
         self.pool2 = nn.Conv2d(base_channels * 2, base_channels * 2, 4, 2, 1)
 
         # Bottleneck (7x7)
-        self.mid = TimeConvBlock(base_channels * 2, base_channels * 2, time_dim)
+        self.mid = TimeConvBlock(
+            base_channels * 2, base_channels * 2, time_dim, fake=fake
+        )
 
         # Upsampling (Decoder)
         # 7x7 -> 14x14
         self.up1 = nn.ConvTranspose2d(base_channels * 2, base_channels * 2, 4, 2, 1)
         # Skip connection adds base_channels*2 + base_channels*2 = base_channels*4
-        self.up_block1 = TimeConvBlock(base_channels * 4, base_channels, time_dim)
+        self.up_block1 = TimeConvBlock(
+            base_channels * 4, base_channels, time_dim, fake=fake
+        )
 
         # 14x14 -> 28x28
         self.up2 = nn.ConvTranspose2d(base_channels, base_channels, 4, 2, 1)
         # Skip connection adds base_channels + base_channels = base_channels*2
-        self.up_block2 = TimeConvBlock(base_channels * 2, base_channels, time_dim)
+        self.up_block2 = TimeConvBlock(
+            base_channels * 2, base_channels, time_dim, fake=fake
+        )
 
         # Final output projection
         self.out_conv = nn.Conv2d(base_channels, in_channels, kernel_size=3, padding=1)
