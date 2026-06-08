@@ -11,7 +11,13 @@ from PIL import Image, ImageDraw, ImageFont
 # 1. Source distribution p0
 def sample_gaussian(batch_size, dim=2, device="cuda"):
     """Sample from standard normal distribution p0."""
-    return torch.randn(batch_size, dim, device=device)
+    if isinstance(dim, int):
+        # int as dimension
+        return torch.randn(batch_size, dim, device=device)
+    else:
+        # dim is a tuple
+        size = (batch_size, *dim)
+        return torch.randn(size=size, device=device)
 
 
 # 2. Target distribution p1
@@ -78,7 +84,7 @@ def sample_letters(batch_size, letters="HD", device="cuda", noise=0.03):
     return tensor_data
 
 
-def plot_samples(samples, title, save=None, show=False):
+def plot_samples(samples, title=None, save=None, show=False):
     """Utility function to plot samples."""
     plt.figure(figsize=(5, 4))
     # pay attention to only plot on cpu
@@ -95,3 +101,59 @@ def plot_samples(samples, title, save=None, show=False):
         if show:
             os.startfile(save)
     # plt.show()
+
+
+def plot_image(image, title=None, save=None, show=False):
+    """Utility function to plot pictures."""
+    fig, ax = plt.subplots(figsize=(4, 4))
+    image = image.cpu().detach()
+    if len(image.shape) == 4:
+        image = image.squeeze(0)
+    if image.shape[0] in (1, 3):
+        image = image.permute(1, 2, 0)
+    ax.imshow(image, cmap="grey")
+    ax.axis("off")
+    ax.set_title(title)
+    if save:
+        plt.savefig(save, dpi=300, bbox_inches="tight")
+        plt.close()
+        if show:
+            os.startfile(save)
+
+
+def plot_many_pics(samples, title, save=None, show=False):
+    """Utility function to plot image samples like MNIST."""
+    import numpy as np
+
+    if hasattr(samples, "cpu"):
+        samples = samples.cpu().detach().numpy()
+
+    n_samples = min(len(samples), 16)
+    if n_samples == 0:
+        return
+
+    cols = min(n_samples, 4)
+    rows = (n_samples + cols - 1) // cols
+
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 1.5, rows * 1.5 + 0.5))
+    fig.suptitle(title)
+
+    if n_samples > 1:
+        axes = axes.flatten()
+    else:
+        axes = [axes]
+
+    for i, ax in enumerate(axes):
+        if i < n_samples:
+            img = samples[i]
+            if img.ndim == 1:
+                side = int(np.sqrt(len(img)))
+                img = img.reshape(side, side)
+            elif img.ndim == 3 and img.shape[0] in [1, 3]:
+                img = np.transpose(img, (1, 2, 0))
+            ax.imshow(np.squeeze(img), cmap="gray")
+        ax.axis("off")
+
+    if save:
+        plt.savefig(save, dpi=300, bbox_inches="tight")
+        plt.close()
