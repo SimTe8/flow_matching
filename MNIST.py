@@ -1,14 +1,13 @@
 # Simple example to use flow matching on a 2D toy dataset. You can run this file directly to see how the training and integration work.
-import os
 
 import torch
 
 from src.data import (
-    plot_samples,
-    sample_gaussian,
+    get_mnist_dataloader,
+    get_single_digit_mnist_dataloader,
 )
-from src.flow_engine import train_loop
-from src.solver import animate_flow, integrate
+from src.flow_engine import train_loop_MNIST
+from src.models.models import MiniUNetVectorField
 from src.utils import save_config, setup_run_dir
 
 # device settings
@@ -25,8 +24,10 @@ else:
 
 # GLOBAL SETTINGS
 config = {
-    "experiment_name": "MNIST_first_baseline",
+    "experiment_name": "MNIST_ext_baseline",
     "dataset": "MNIST",
+    "single_digit": None,
+    "batch_size": 128,
     "n_test_samples": 10,
     # model settings
     "model": "MiniUNetVectorField",
@@ -39,10 +40,10 @@ config = {
     "n_steps": 10,
     # training settings
     "train_config": {
-        "n_epochs": 10,
+        "n_epochs": 100,
         "device": device,
         "save_model": True,
-        "save_bestmodel": False,
+        "save_bestmodel": True,
         "save_last_checkpoint": False,
         "save_loss": True,
         "plot_loss": True,
@@ -57,14 +58,18 @@ save_config(run_dir, config)
 
 
 # define dataset
-# dl_train =
+if config["single_digit"] is None:
+    dl_train = get_mnist_dataloader(batch_size=config["batch_size"])
+else:
+    dl_train = get_single_digit_mnist_dataloader(
+        digit=config["single_digit"], batch_size=config["batch_size"]
+    )
+
 
 # define model
 match config["model"]:
-    case "SimpleMLP_VF":
-        model = SimpleMLPVectorField().to(device)
-    case "MLP_VF":
-        model = MLPVectorField().to(device)
+    case "MiniUNetVectorField":
+        model = MiniUNetVectorField().to(device)
     case _:
         raise ValueError("Unknown model type.")
 
@@ -80,46 +85,40 @@ match config["optimizer"]:
 
 # training
 print("Starting training...\n")
-loss_history = train_loop(
-    model, optimizer, x1, folderpath=run_dir, **config["train_config"]
+loss_history = train_loop_MNIST(
+    model, optimizer, dl_train, folderpath=run_dir, **config["train_config"]
 )
 print("Training completed.\n")
 
-# integration
-x0 = sample_gaussian(config["n_test_samples"], device=device)
-x_final, trajectories = integrate(
-    model, x0, n_steps=config["n_steps"], h=config["h"], integrator=config["integrator"]
-)
+# # integration
+# x0 = sample_gaussian(config["n_test_samples"], device=device)
+# x_final, trajectories = integrate(
+#     model, x0, n_steps=config["n_steps"], h=config["h"], integrator=config["integrator"]
+# )
 
-plot_samples(
-    x_final,
-    "Final Samples x1 (after integration)",
-    save=os.path.join(run_dir, "final_samples.png"),
-    show=True,
-)
 
-# animation
-if config["animate"]:
-    print("Generating animation...\n")
-    ani = animate_flow(trajectories)
-    # ani.save(
-    #     os.path.join(run_dir, "flow_matching_animation.gif"), writer="pillow", fps=20
-    # )
-    # plt.show()
+# # animation
+# if config["animate"]:
+#     print("Generating animation...\n")
+#     ani = animate_flow(trajectories)
+#     # ani.save(
+#     #     os.path.join(run_dir, "flow_matching_animation.gif"), writer="pillow", fps=20
+#     # )
+#     # plt.show()
 
-    if config["save_animation"]:
-        # save gif
-        ani.save(
-            os.path.join(run_dir, "flow_matching_animation.gif"),
-            writer="pillow",
-            fps=20,
-            dpi=200,
-        )
-        print(f"Saved animation in {run_dir}!")
-        # # save mp4 (requires ffmpeg installed)
-        # ani.save(
-        #     os.path.join(run_dir, "flow_matching_animation.mp4"),
-        #     writer="ffmpeg",
-        #     fps=20,
-        #     dpi=200,
-        # )
+#     if config["save_animation"]:
+#         # save gif
+#         ani.save(
+#             os.path.join(run_dir, "flow_matching_animation.gif"),
+#             writer="pillow",
+#             fps=20,
+#             dpi=200,
+#         )
+#         print(f"Saved animation in {run_dir}!")
+#         # # save mp4 (requires ffmpeg installed)
+#         # ani.save(
+#         #     os.path.join(run_dir, "flow_matching_animation.mp4"),
+#         #     writer="ffmpeg",
+#         #     fps=20,
+#         #     dpi=200,
+#         # )

@@ -156,6 +156,7 @@ class TimeEmbeddingMLPVectorFieldND(nn.Module):
 
         self.layer1 = nn.Linear(hidden_dim, hidden_dim)
         self.layer2 = nn.Linear(hidden_dim, hidden_dim)
+        self.layer3 = nn.Linear(hidden_dim, hidden_dim)
 
         self.output_layer = nn.Linear(hidden_dim, data_dim)
 
@@ -176,6 +177,9 @@ class TimeEmbeddingMLPVectorFieldND(nn.Module):
         h = self.act(h + t_context)
 
         h = self.layer2(h)
+        h = self.act(h + t_context)
+
+        h = self.layer3(h)
         h = self.act(h + t_context)
 
         out = self.output_layer(h)

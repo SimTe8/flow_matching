@@ -6,6 +6,7 @@ import numpy as np
 import sklearn.datasets
 import torch
 from PIL import Image, ImageDraw, ImageFont
+from torchvision import datasets, transforms
 
 
 # 1. Source distribution p0
@@ -157,3 +158,55 @@ def plot_many_pics(samples, title, save=None, show=False):
     if save:
         plt.savefig(save, dpi=300, bbox_inches="tight")
         plt.close()
+
+
+# MNIST
+
+
+# build dataloader
+def get_mnist_dataloader(batch_size=128, data_dir="src/data"):
+    """Download MNIST and return a configured DataLoader."""
+
+    # Transform: Convert PIL Image to Tensor and normalize to [-1, 1]
+    # Normalizing makes the flow matching process significantly more stable
+    transform = transforms.Compose(
+        [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
+    )
+
+    # Download training dataset
+    train_dataset = datasets.MNIST(
+        root=data_dir, train=True, download=True, transform=transform
+    )
+
+    # Setup DataLoader
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True, drop_last=True
+    )
+
+    return train_loader
+
+
+def get_single_digit_mnist_dataloader(digit=8, batch_size=128, data_dir="src/data"):
+    """Download MNIST and return a DataLoader filtering for a single digit."""
+
+    transform = transforms.Compose(
+        [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
+    )
+
+    # Load full dataset
+    full_dataset = datasets.MNIST(
+        root=data_dir, train=True, download=True, transform=transform
+    )
+
+    # Filter indices where target equals the specified digit
+    indices = (full_dataset.targets == digit).nonzero(as_tuple=True)[0]
+
+    # Create a subset with only that digit
+    single_digit_subset = torch.utils.data.Subset(full_dataset, indices)
+
+    # Setup DataLoader
+    train_loader = torch.utils.data.DataLoader(
+        single_digit_subset, batch_size=batch_size, shuffle=True, drop_last=True
+    )
+
+    return train_loader

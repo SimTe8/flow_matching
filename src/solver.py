@@ -81,3 +81,76 @@ def animate_flow(trajectories):
     plt.close()  # Prevent static plot from showing up
 
     return ani
+
+
+def animate_vf(
+    model,
+    bounds=(-2, 2),
+    grid_res=40,
+    n_frames=50,
+    device="cuda",
+):
+    """
+    Animates the learned 2D vector field over time and saves it as a GIF.
+    """
+    model.eval()
+
+    # 1. Create static spatial grid
+    x = np.linspace(bounds[0], bounds[1], grid_res)
+    y = np.linspace(bounds[0], bounds[1], grid_res)
+    X, Y = np.meshgrid(x, y)
+
+    grid_pts = np.stack([X.flatten(), Y.flatten()], axis=1)
+    xt_tensor = torch.tensor(grid_pts, dtype=torch.float32).to(device)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+
+    def update(frame):
+        """Update function for each animation frame."""
+        ax.clear()
+
+        # Calculate normalized time t in [0, 1]
+        t = frame / max(1, (n_frames - 1))
+        t_tensor = torch.full((xt_tensor.shape[0], 1), t, dtype=torch.float32).to(
+            device
+        )
+
+        # 2. Predict velocities for current t
+        with torch.no_grad():
+            vt = model(xt_tensor, t_tensor).cpu().numpy()
+
+        U = vt[:, 0].reshape(grid_res, grid_res)
+        V = vt[:, 1].reshape(grid_res, grid_res)
+        speed = np.sqrt(U**2 + V**2)
+
+        # 3. Draw streamplot
+        # ax.streamplot(X, Y, U, V, color=speed, cmap='viridis',
+        #               linewidth=1.5, density=1.2, arrowsize=1.5)
+        q = ax.quiver(
+            X, Y, U, V, speed, cmap="viridis", scale=80, width=0.005, alpha=0.9
+        )
+
+        # Format plot
+        ax.set_title(f"Time $t = {t:.2f}$", fontsize=16)
+        ax.set_xlim(bounds)
+        ax.set_ylim(bounds)
+        ax.set_xlabel("$x_1$", fontsize=12)
+        ax.set_ylabel("$x_2$", fontsize=12)
+        ax.set_aspect("equal")
+        ax.grid(True, alpha=0.3)
+
+        # Simple console progress
+        print(f"Rendering frame {frame + 1}/{n_frames}", end="\r")
+
+    print(f"Generating animation ({n_frames} frames)...")
+
+    # Create and save animation
+    anim = animation.FuncAnimation(fig, update, frames=n_frames, blit=False)
+    # if save:
+    #     writer = animation.PillowWriter(fps=fps)
+    #     anim.save(filename, writer=writer)
+    #     print(f"\nSuccessfully saved animation to: {filename}")
+
+    plt.close()
+
+    return anim

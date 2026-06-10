@@ -12,7 +12,7 @@ from src.data import (
 )
 from src.flow_engine import train_loop
 from src.models.models import MLPVectorField, SimpleMLPVectorField
-from src.solver import animate_flow, integrate
+from src.solver import animate_flow, animate_vf, integrate
 from src.utils import save_config, setup_run_dir
 
 # device settings
@@ -29,9 +29,9 @@ else:
 
 # GLOBAL SETTINGS
 config = {
-    "experiment_name": "moons_no_t_dep",
-    "dataset": "moons",  # options: "moons", "circles", "letters"
-    "letters": "ST",  # only used if dataset == "letters"
+    "experiment_name": "letters_delete",
+    "dataset": "letters",  # options: "moons", "circles", "letters"
+    "letters": "HD",  # only used if dataset == "letters"
     "n_train_samples": 10000,
     "n_test_samples": 200,
     # model settings
@@ -56,6 +56,8 @@ config = {
     },
     "animate": True,
     "save_animation": True,
+    "animate_vf": True,
+    "save_animation_vf": True,
 }
 
 # setup directory and save config
@@ -116,6 +118,13 @@ print("Training completed.\n")
 
 # integration
 x0 = sample_gaussian(config["n_test_samples"], device=device)
+# plot_samples(
+#     x0,
+#     "Noise Samples x0",
+#     save=os.path.join(run_dir, "initial_samples.png"),
+#     show=True,
+# )
+
 x_final, trajectories = integrate(
     model, x0, n_steps=config["n_steps"], h=config["h"], integrator=config["integrator"]
 )
@@ -152,3 +161,19 @@ if config["animate"]:
         #     fps=20,
         #     dpi=200,
         # )
+
+if config["animate_vf"]:
+    print("Generating vector field animation...\n")
+    ani = animate_vf(
+        model,
+        device=device,
+    )
+    if config["save_animation_vf"]:
+        # save gif
+        ani.save(
+            os.path.join(run_dir, "vf_animation.gif"),
+            writer="pillow",
+            fps=15,
+            dpi=200,
+        )
+        print(f"Saved vf animation in {run_dir}!")

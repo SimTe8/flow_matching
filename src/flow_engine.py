@@ -7,13 +7,42 @@ import torch
 
 from .data import sample_gaussian
 
+# def compute_conditional_flow(x1, device="cuda"):
+#     """Compute interpolations and targets using your custom sampler."""
+#     batch_size = x1.shape[0]
+
+#     # 1. Use your modular sampler for p0
+#     x0 = sample_gaussian(batch_size, dim=x1.shape[1], device=device)
+
+#     # 2. Sample time steps t uniformly in [0, 1]
+#     t = torch.rand(batch_size, 1, device=device)
+
+#     # 3. Linear interpolation (path x_t)
+#     t_expanded = t.view(
+#         batch_size, *([1] * (len(x1.shape) - 1))
+#     )  # change shape / broadcasting
+#     xt = t_expanded * x1 + (1.0 - t_expanded) * x0
+
+#     # 4. Conditional vector field target (u_t)
+#     # this is the most simple vector field based on linear interpolation
+#     # more complex paths are easily possible too
+#     ut = x1 - x0
+
+#     return xt, t, ut
+
 
 def compute_conditional_flow(x1, device="cuda"):
     """Compute interpolations and targets using your custom sampler."""
     batch_size = x1.shape[0]
 
-    # 1. Use your modular sampler for p0
-    x0 = sample_gaussian(batch_size, dim=x1.shape[1], device=device)
+    # sampler for p0
+    if len(x1.shape) == 4:
+        # we expect shape (batch size, channel, height, width)
+        x0 = sample_gaussian(batch_size, tuple(x1.shape[1:]), device=device)
+    elif len(x1.shape) == 2:
+        x0 = sample_gaussian(batch_size, dim=x1.shape[1], device=device)
+    else:
+        raise ValueError("Unknown shape for loss function.")
 
     # 2. Sample time steps t uniformly in [0, 1]
     t = torch.rand(batch_size, 1, device=device)
@@ -172,3 +201,77 @@ def load_checkpoint(model, optimizer, path):
     # read out epoch
     start_epoch = checkpoint["epoch"]
     return model, optimizer, start_epoch
+
+
+def train_loop_MNIST(
+    model,
+    optimizer,
+    train_loader,
+    n_epochs=1000,
+    device="cuda",
+    save_model=True,
+    save_bestmodel=False,
+    save_last_checkpoint=False,
+    save_loss=True,
+    plot_loss=True,
+    folderpath="results",
+):
+    """Trains the model for a specified number of epochs."""
+    loss_history = []
+    for epoch in range(n_epochs):
+        epoch_loss = 0
+        n_batches = len(train_loader)
+        for images, targets in train_loader:
+            # only give the images, not the targets
+            images = images.to(device)
+            loss = train_step(model, optimizer, images, device=device)
+            epoch_loss += loss.item() if hasattr(loss, "item") else loss
+        # here simple avg-calculation since we drop the last, not-full batch
+        epoch_avg_loss = epoch_loss / n_batches
+        loss_history.append(epoch_avg_loss)
+
+        if epoch == 0:
+            print(f"Initial Loss: {loss:.4f}")
+            min_loss = loss
+
+        if loss < min_loss:
+            min_loss = loss
+            if save_bestmodel:
+                store_model(model, folderpath=folderpath, filename="model_best")
+        # elif (epoch + 1) % 100 == 0:
+        #     print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {loss:.4f}")
+        print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {loss:.4f}")
+
+    if save_model:
+        store_model(model, folderpath=folderpath, filename=None)
+    if save_last_checkpoint:
+        store_checkpoint(
+            model,
+            optimizer=optimizer,
+            epoch=n_epochs,
+            folderpath=folderpath,
+            filename=None,
+        )
+    if save_loss:
+        loss_path = os.path.join(folderpath, "loss_history")
+        # save as pytorch file for later loading
+        torch.save(loss_history, f"{loss_path}.pth")
+        # csv with numpy
+        loss_np = np.array(loss_history)
+        np.savetxt(f"{loss_path}.csv", loss_np, fmt="%.6f")
+
+        print(f"Loss history saved to {folderpath}")
+
+    if plot_loss:
+        fig, ax = plt.subplots(figsize=(5, 4))
+        ax.plot(loss_history)
+        ax.set_title("Training Loss")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("MSE Loss")
+        fig.savefig(
+            os.path.join(folderpath, "loss_history.png"), dpi=300, bbox_inches="tight"
+        )
+        plt.close()
+        os.startfile(os.path.join(folderpath, "loss_history.png"))
+
+    return loss_history
